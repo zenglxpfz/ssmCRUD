@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:aop="http://www.springframework.org/schema/aop"
+	   xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:tx="http://www.springframework.org/schema/tx"    
+          xsi:schemaLocation="
+                http://www.springframework.org/schema/beans
+                http://www.springframework.org/schema/beans/spring-beans.xsd
+                http://www.springframework.org/schema/aop
+       			http://www.springframework.org/schema/aop/spring-aop.xsd
+       			http://www.springframework.org/schema/context
+                http://www.springframework.org/schema/context/spring-context.xsd
+       			http://www.springframework.org/schema/tx
+        		http://www.springframework.org/schema/tx/spring-tx.xsd
+       			 ">
+       			
+       			<!-- spring 管理了数据库层，service层就是不管理Servlet层控制器，所以扫包的时候排除控制器类 --> 
+        <context:component-scan base-package="com.zyq" >
+        	<context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+        </context:component-scan>
+       			 
+     <!--=========== spring的配置文件，这里主要配置和业务逻辑有关的 =============-->
+       	<!-- 数据源，事务控制，xxx -->	
+       		<!-- 引入加载mybaties 属性，整合数据库框架-->
+       	<context:property-placeholder location="classpath:db.properties"/>
+       	<!-- 配置数据源 -->
+       	<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+	       	<!-- 加载四个数据库属性 -->
+	       	<property name="driverClassName" value="${jdbc.driver}"></property>
+	    	<property name="url" value="${jdbc.url}"></property>
+	    	<property name="username" value="${jdbc.username}"></property>
+	    	<property name="password" value="${jdbc.password}"></property>
+       	</bean>
+       	<!-- ================================================================== -->
+       	
+       	
+       	<!--=================== 和mybatis整合，sqlsessionfactory ======================-->
+       	<bean id="factory" class="org.mybatis.spring.SqlSessionFactoryBean">
+       		<property name="dataSource" ref="dataSource"></property>
+          	<!-- 给包起别名 -->
+    	    <property name="typeAliasesPackage" value="com.zyq.pojo"></property>
+  			
+  			<!-- 分页助手 -->
+  			<property name="plugins">
+				<array>
+					<bean class="com.github.pagehelper.PageInterceptor">
+						<property name="properties">
+						<!-- 什么都不配，使用默认的配置 -->
+							
+								<props>
+								<!-- 
+									分页插件会自动检测当前的数据库链接，自动选择合适的分页方式.
+ 									你可以配置helperDialect 属性来指定分页插件使用哪种方言。
+ 									配置时，可以使用下面的缩写值：oracle , mysql , mariadb , sqlite ,
+ 									 hsqldb , postgresql , db2 , sqlserver , informix , h2 , 
+ 									 sqlserver2012 , 
+ 									 derby特别注意：使用 SqlServer2012 数据库时，需要手动指定为 sqlserver2012 
+ 									，否则会使用 SqlServer2005 的方式进行分页。
+ 									你也可以实现 AbstractHelperDialect ，
+ 									 然后配置该属性为实现类的全限定名称即可使用自定义的实现方法。
+ 								-->
+									
+									<prop key="helperDialect">mysql</prop>
+						  			
+						  			<!-- 分页合理化
+						  			当该参数设置为 true 时， pageNum<=0 时会查询第一页，
+						  			 pageNum>pages （超过总数时），会查询最后一页
+						  			。默认 false 时，直接根据参数进行查询。
+						  			 -->
+						  			<prop key="reasonable">true</prop>
+								</props>
+						</property>
+					<!-- 调整分页参数合理化 -->
+					
+					</bean>
+				</array>
+		</property>
+		
+		
+       	</bean>
+       	
+       	<!-- 创建扫描器加载mapper的包下的文件接口java和配置文件xml -->
+       	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+	       	<!-- 如果不使用这个属性调用,属性文件加载不到 -->
+	    	<property name="sqlSessionFactoryBeanName" value="factory"></property>
+       		<property name="basePackage" value="com.zyq.mapper"></property>
+       	</bean>
+       	
+       	
+       	<!-- ================================================================== -->
+       	
+       	<!-- 批量生产数据 sqlSession-->
+       	<bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate">
+       		<constructor-arg name="sqlSessionFactory" ref="factory"></constructor-arg>
+       		<constructor-arg name="executorType" value="BATCH"></constructor-arg>
+       	</bean>
+       	
+       	<!-- =========spring事务管理器，是一个类,开启事务对象吧 ,事务提交数据到数据库中，所以还要连接数据库，针对的是业务层=======-->
+       	<bean id="txManage" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+       		<property name="dataSource" ref="dataSource"></property>
+       	</bean>	
+       	<!-- 配置分页助手 -->
+       	
+       	<!-- 开启基于注解的事务通知，使用xml配置式形式的事务（必要主要的都是使用配置式） --> 
+		<aop:config>
+			<aop:pointcut expression="execution(* com.zyq.sevice..*(..))" id="mypoint"/>
+			<!-- 配置事务增强 -->
+			<aop:advisor advice-ref="txAdvice" pointcut-ref="mypoint"/>
+		</aop:config>
+		 <!-- 配置具体方法有事务逻辑，需要连接到管理器类处理 -->
+		 <tx:advice id="txAdvice" transaction-manager="txManage">
+		  	<tx:attributes>
+		  	<tx:method name="*"/>
+		  	<!-- true 表示只读事务，false为提交事务，默认吧 -->
+		  	<tx:method name="get" read-only="true"/>
+		  	</tx:attributes>
+		 </tx:advice>
+		 <!-- ============================================= -->
+</beans>  			 
